@@ -98,6 +98,38 @@
   .result-sub { font-size: 17px; font-variant-numeric: tabular-nums; color: var(--muted2); }
 
   .error-msg { font-size: 14px; color: var(--red); padding: 4px 2px; display: none; }
+
+  .picker-row { display: flex; gap: 10px; flex-wrap: wrap; }
+  input[type="date"], input[type="time"] {
+    flex: 1;
+    min-width: 130px;
+    font-size: 16px;
+    font-family: Helvetica, Arial, sans-serif;
+    padding: 14px 16px;
+    border: 1px solid var(--border-strong);
+    border-radius: 4px;
+    background: #fff;
+    color: var(--text);
+    outline: none;
+  }
+  input[type="date"] { min-width: 150px; }
+  input[type="date"]:focus, input[type="time"]:focus { border-color: var(--accent); }
+  select {
+    font-size: 15px;
+    font-family: Helvetica, Arial, sans-serif;
+    padding: 14px 12px;
+    border: 1px solid var(--border-strong);
+    border-radius: 4px;
+    background: #fff;
+    color: var(--text);
+    outline: none;
+  }
+  select:focus { border-color: var(--accent); }
+
+  .picked-card {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 20px 22px; border: 1px solid var(--border); border-radius: 4px; background: var(--card);
+  }
 </style>
 </head>
 <body>
@@ -155,6 +187,23 @@
     <div class="error-msg" id="errorMsg">Enter a valid Unix timestamp in seconds (e.g. 10 digits for current era).</div>
   </div>
 
+  <div class="convert-block">
+    <label class="label">Date &amp; time to Unix timestamp</label>
+    <div class="picker-row">
+      <input type="date" id="pickDate">
+      <input type="time" id="pickTime" step="1">
+      <select id="pickOffset"></select>
+    </div>
+
+    <div class="picked-card">
+      <div class="result-col">
+        <span class="label">Unix timestamp</span>
+        <span class="result-main" id="pickedTs" style="font-variant-numeric: tabular-nums;">—</span>
+      </div>
+      <button id="copyPickedBtn">Copy</button>
+    </div>
+  </div>
+
 </div>
 
 <script>
@@ -169,6 +218,12 @@
   const utcResultEl = document.getElementById('utcResult');
   const relativeResultEl = document.getElementById('relativeResult');
   const copyLocalBtn = document.getElementById('copyLocalBtn');
+
+  const pickDateEl = document.getElementById('pickDate');
+  const pickTimeEl = document.getElementById('pickTime');
+  const pickOffsetEl = document.getElementById('pickOffset');
+  const pickedTsEl = document.getElementById('pickedTs');
+  const copyPickedBtn = document.getElementById('copyPickedBtn');
 
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
   tzLabelEl.textContent = tz;
@@ -258,6 +313,59 @@
   });
   copyNowBtn.addEventListener('click', () => copyText(String(currentNow), copyNowBtn));
   copyLocalBtn.addEventListener('click', () => copyText(lastLocalResult, copyLocalBtn));
+
+  // Date & time -> Unix timestamp picker
+
+  function buildOffsetOptions() {
+    for (let m = -720; m <= 840; m += 30) {
+      const sign = m >= 0 ? '+' : '-';
+      const abs = Math.abs(m);
+      const hh = String(Math.floor(abs / 60)).padStart(2, '0');
+      const mm = String(abs % 60).padStart(2, '0');
+      const opt = document.createElement('option');
+      opt.value = String(m);
+      opt.textContent = `UTC${sign}${hh}:${mm}`;
+      pickOffsetEl.appendChild(opt);
+    }
+  }
+
+  function initPickerDefaults() {
+    const now = new Date();
+    const pad = n => String(n).padStart(2, '0');
+    pickDateEl.value = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+    pickTimeEl.value = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+    pickOffsetEl.value = String(-now.getTimezoneOffset());
+  }
+
+  let lastPickedTs = null;
+
+  function computePickedTs() {
+    const dateVal = pickDateEl.value;
+    const timeVal = pickTimeEl.value;
+    if (!dateVal || !timeVal) return null;
+    const [y, mo, da] = dateVal.split('-').map(Number);
+    const timeParts = timeVal.split(':').map(Number);
+    const h = timeParts[0] || 0, mi = timeParts[1] || 0, s = timeParts[2] || 0;
+    const offsetMin = parseInt(pickOffsetEl.value, 10);
+    const utcMs = Date.UTC(y, mo - 1, da, h, mi, s) - offsetMin * 60000;
+    return Math.floor(utcMs / 1000);
+  }
+
+  function updatePickedTs() {
+    lastPickedTs = computePickedTs();
+    pickedTsEl.textContent = lastPickedTs === null ? '—' : lastPickedTs;
+  }
+
+  pickDateEl.addEventListener('change', updatePickedTs);
+  pickTimeEl.addEventListener('change', updatePickedTs);
+  pickOffsetEl.addEventListener('change', updatePickedTs);
+  copyPickedBtn.addEventListener('click', () => {
+    if (lastPickedTs !== null) copyText(String(lastPickedTs), copyPickedBtn);
+  });
+
+  buildOffsetOptions();
+  initPickerDefaults();
+  updatePickedTs();
 </script>
 
 </body>
